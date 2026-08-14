@@ -17,10 +17,18 @@ public sealed class Win32HwndHost : HwndHost
     private static readonly IntPtr WmEraseBackground = new(0x0014);
 
     private IntPtr _hwnd;
+    private GCHandle _handle;
+
+    /// <summary>在原生渲染目标上发生双击时触发（用于全屏切换）。</summary>
+    public event Action? DoubleClicked;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
-        var hInstance = Marshal.GetHINSTANCE(typeof(Win32HwndHost).Module);
+        // 单文件发布时 Marshal.GetHINSTANCE 会返回 -1，改用 GetModuleHandle(null) 获取进程模块句柄
+        var hInstance = GetModuleHandle(null);
         if (!_classRegistered)
         {
             var wndClass = new WndClassEx
@@ -37,11 +45,18 @@ public sealed class Win32HwndHost : HwndHost
             0, WndClassName, "MpvHost",
             0x40000000 /* WS_CHILD */ | 0x40000000 /* WS_CLIPSIBLINGS */ | 0x10000000 /* WS_VISIBLE */,
             0, 0, 640, 360, hwndParent.Handle, IntPtr.Zero, hInstance, IntPtr.Zero);
+
+        // 把 host 实例挂到窗口 USERDATA，供 NativeWndProc 触发双击事件
+        _handle = GCHandle.Alloc(this);
+        SetWindowLong(_hwnd, GWL_USERDATA, GCHandle.ToIntPtr(_handle));
+
         return new HandleRef(this, _hwnd);
     }
 
     protected override void DestroyWindowCore(HandleRef hwnd)
     {
+        if (_handle.IsAllocated)
+            _handle.Free();
         if (hwnd.Handle != IntPtr.Zero)
             DestroyWindow(hwnd.Handle);
     }
@@ -60,7 +75,25 @@ public sealed class Win32HwndHost : HwndHost
         return base.WndProc(hwnd, msg, wParam, lParam, ref handled);
     }
 
-    private static readonly WndProcDelegate NativeWndProc = (h, m, w, l) => DefWindowProc(h, m, w, l);
+    private static readonly WndProcDelegate NativeWndProc = (h, m, w, l) =>
+    {
+        const int WM_LBUTTONDBLCLK = 0x0203;
+        // 通过 GWL_USERDATA 取回 host 实例以触发双击事件
+        if (m == WM_LBUTTONDBLCLK && GetWindowLong(h, GWL_USERDATA) is IntPtr ptr && ptr != IntPtr.Zero)
+        {
+            var host = GCHandle.FromIntPtr(ptr).Target as Win32HwndHost;
+            host?.DoubleClicked?.Invoke();
+        }
+        return DefWindowProc(h, m, w, l);
+    };
+
+    private const int GWL_USERDATA = -21;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
     private delegate IntPtr WndProcDelegate(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
 

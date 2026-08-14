@@ -1,6 +1,7 @@
 using System.Net;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using ScreenCastReceiver.Helpers;
 using ScreenCastReceiver.Logging;
@@ -31,6 +32,8 @@ public partial class MainWindow : Window
     private readonly System.Windows.Threading.DispatcherTimer _uiTimer;
     private bool _scrubbing; // 拖动进度条中（拖动时不回写滑块、释放时才 seek）
     private bool _showSpeed;
+    private bool _isFullscreen;
+    private GridLength _sidebarWidth;
 
     public MainWindow()
     {
@@ -89,19 +92,52 @@ public partial class MainWindow : Window
 
     private async void OnDlnaChecked(object sender, RoutedEventArgs e)
     {
-        _dlna.SetDeviceName(TxtDlnaName.Text);
+        ApplyDlnaSettings();
         await Task.Run(() => _dlna.StartAsync());
     }
 
     private async void OnDlnaUnchecked(object sender, RoutedEventArgs e)
         => await Task.Run(() => _dlna.StopAsync());
 
+    private void ApplyDlnaSettings()
+    {
+        _dlna.SetDeviceName(TxtDlnaName.Text);
+        if (int.TryParse(TxtDlnaPortInput.Text, out var port) && port >= 0 && port <= 65535)
+            _dlna.Port = port;
+        else
+            _dlna.Port = 0;
+    }
+
     private void OnDlnaNameChanged(object sender, TextChangedEventArgs e)
     {
-        // XAML 初始化阶段 _dlna 可能尚未创建，需防空
-        // 运行中修改名称需要重启服务才生效，仅提示日志
         if (_dlna?.Status == ServiceStatus.Running)
             _log.Info("[DLNA]", $"设备名称已修改为: {TxtDlnaName.Text}（重启 DLNA 服务后生效）");
+    }
+
+    private void OnDlnaPortChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_dlna?.Status == ServiceStatus.Running)
+            _log.Info("[DLNA]", $"端口已修改为: {TxtDlnaPortInput.Text}（重启 DLNA 服务后生效，0=自动）");
+    }
+
+    private void OnPortPreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = !e.Text.All(char.IsDigit);
+    }
+
+    /// <summary>硬解/软解开关：即时切换当前播放，不重启 mpv、不断开 DLNA。</summary>
+    private void OnHwAccelSwitchChanged(object sender, RoutedEventArgs e)
+    {
+        // InitializeComponent 加载 XAML 期间 IsChecked="True" 会提前触发本事件，
+        // 此时 _mpv 与 TxtHwAccelStatus 均未创建，必须直接跳过
+        if (_mpv == null || TxtHwAccelStatus == null) return;
+        var mode = ChkHwAccel.IsChecked == true ? HwAccelMode.Auto : HwAccelMode.Off;
+        _mpv.HardwareAcceleration = mode;
+        _mpv.ApplyHwAccelSwitch(mode); // 对正在播放的会话实时生效
+        TxtHwAccelStatus.Text = ChkHwAccel.IsChecked == true
+            ? "当前: 硬解 (D3D11VA) · 已即时应用，投屏不会中断"
+            : "当前: 软解 (CPU) · 已即时应用，投屏不会中断";
+        TxtHwAccelStatus.Visibility = Visibility.Visible;
     }
 
     // ==================== 服务状态更新 ====================
@@ -179,6 +215,7 @@ public partial class MainWindow : Window
         foreach (var k in new[] { ServiceKind.Dlna })
         {
             var host = _mpv.GetHost(k);
+            host.DoubleClicked += () => Dispatcher.Invoke(ToggleFullscreen);
             PlaybackHosts.Children.Add(host);
             host.Visibility = Visibility.Collapsed;
             _hosts[k] = host;
@@ -321,37 +358,6 @@ public partial class MainWindow : Window
         if (_showSpeed && _mpv != null) RefreshPlaybackUi();
     }
 
-    // ==================== 防火墙（需求：放 UI 面板，不阻塞使用） ====================
-
-    private void OnAddFirewallRule(object sender, RoutedEventArgs e)
-    {
-        var (success, output) = FirewallHelper.TryAddRule(
-            Environment.ProcessPath ?? AppContext.BaseDirectory,
-            new[] { _dlna.ListeningPort }.Where(p => p > 0).ToArray(),
-            new[] { 1900 });
-        _log.Info("[防火墙]", output);
-        if (!success)
-            _log.Warn("[防火墙]", "如未弹出 UAC 授权，请右键“以管理员身份运行”本程序，或复制命令手动执行");
-    }
-
-    private void OnCopyFirewallCommand(object sender, RoutedEventArgs e)
-    {
-        var cmd = FirewallHelper.BuildNetshCommand(
-            Environment.ProcessPath ?? AppContext.BaseDirectory,
-            new[] { 49152 },
-            new[] { 1900 });
-        TxtFirewallCommand.Text = cmd;
-        try
-        {
-            Clipboard.SetText(cmd);
-            _log.Info("[防火墙]", "netsh 命令已复制到剪贴板（可在管理员命令行中执行）");
-        }
-        catch (Exception ex)
-        {
-            _log.Warn("[防火墙]", $"复制失败: {ex.Message}");
-        }
-    }
-
     // ==================== 局域网 IP ====================
 
     private void OnRefreshLanIp(object sender, RoutedEventArgs e) => RefreshLanIp();
@@ -360,6 +366,54 @@ public partial class MainWindow : Window
     {
         var ip = NetworkHelper.GetFirstLanIpv4();
         TxtLanIp.Text = ip?.ToString() ?? "未找到局域网IP";
+    }
+
+    // ==================== 全屏（按钮 / 双击 / ESC）====================
+
+    private void OnToggleFullscreen(object sender, RoutedEventArgs e) => ToggleFullscreen();
+
+    private void OnVideoMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            ToggleFullscreen();
+            e.Handled = true;
+        }
+    }
+
+    private void OnWindowKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _isFullscreen)
+        {
+            ToggleFullscreen();
+            e.Handled = true;
+        }
+    }
+
+    private void ToggleFullscreen()
+    {
+        _isFullscreen = !_isFullscreen;
+        if (_isFullscreen)
+        {
+            _sidebarWidth = LeftColumn.Width;
+            LeftColumn.Width = new GridLength(0);
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+            WindowState = WindowState.Maximized;
+            BtnFullscreen.Content = "⛶ 退出全屏";
+            BtnFullscreen.Opacity = 0.4;
+        }
+        else
+        {
+            LeftColumn.Width = _sidebarWidth.IsStar || _sidebarWidth.Value <= 0
+                ? new GridLength(360)
+                : _sidebarWidth;
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            ResizeMode = ResizeMode.CanResize;
+            WindowState = WindowState.Normal;
+            BtnFullscreen.Content = "⛶ 全屏";
+            BtnFullscreen.Opacity = 0.7;
+        }
     }
 
     // ==================== 关闭流程（需求③：强制停止全部服务 → 释放端口 → 退出） ====================

@@ -90,6 +90,18 @@ public sealed class LocalStreamForwarder : IDisposable
 /// 并监听事件（file-loaded / end-file / property-change）。
 /// 使用 --wid 把渲染画面嵌入到 WPF 的 HwndHost 窗口。
 /// </summary>
+/// <summary>硬件加速模式。</summary>
+public enum HwAccelMode
+{
+    Auto,       // 自动选择
+    Nvidia,     // NVIDIA NVENC
+    Intel,      // Intel QuickSync
+    Amd,        // AMD AMF
+    D3D11VA,    // Windows D3D11VA
+    Adapter,    // 用户指定具体显卡（配合 HwAccelAdapter）
+    Off         // 软解
+}
+
 public sealed class MpvProcess : IDisposable
 {
     private readonly AppLogger _log;
@@ -107,6 +119,12 @@ public sealed class MpvProcess : IDisposable
     private bool _isPaused;
     private double _speed = 1.0;
 
+    /// <summary>当前硬件加速模式（调试用）。</summary>
+    public HwAccelMode HwAccel { get; }
+
+    /// <summary>用户指定的显卡适配器名称（HwAccel=Adapter 时生效，传给 mpv --d3d11-adapter）。</summary>
+    public string? HwAccelAdapter { get; }
+
     /// <summary>媒体加载完成。</summary>
     public event Action? MediaLoaded;
 
@@ -116,10 +134,13 @@ public sealed class MpvProcess : IDisposable
     /// <summary>播放错误（end-file reason=error）。</summary>
     public event Action<string>? MediaError;
 
-    public MpvProcess(AppLogger log, string tag, string mpvExePath, IntPtr hwnd)
+    public MpvProcess(AppLogger log, string tag, string mpvExePath, IntPtr hwnd,
+        HwAccelMode hwAccel = HwAccelMode.Auto, string? hwAccelAdapter = null)
     {
         _log = log;
         _tag = tag;
+        HwAccel = hwAccel;
+        HwAccelAdapter = hwAccelAdapter;
 
         var pipeName = $"screencast_{Guid.NewGuid():N}";
         var pipePath = $@"\\.\pipe\{pipeName}";
@@ -138,12 +159,12 @@ public sealed class MpvProcess : IDisposable
         psi.ArgumentList.Add("--no-terminal");
         psi.ArgumentList.Add("--no-osc");
         psi.ArgumentList.Add("--no-input-default-bindings");
-        psi.ArgumentList.Add("--hwdec=auto");
-        psi.ArgumentList.Add("--keep-open=no");
         psi.ArgumentList.Add("--volume=100");
         // 窗口隐藏/尺寸为 0 时启动 mpv，D3D11 渲染表面可能初始化失败导致有声音无画面。
         // force-window=immediate 让 mpv 即使窗口不可见也强制创建渲染窗口，配合下方 RebindWindow 在窗口显示后重设 wid。
         psi.ArgumentList.Add("--force-window=immediate");
+        // ========== Windows 硬件加速（可选，由界面下拉框决定）==========
+        ApplyHwAccel(psi, hwAccel, hwAccelAdapter);
 
         _proc = Process.Start(psi) ?? throw new InvalidOperationException("mpv.exe 启动失败");
         _proc.EnableRaisingEvents = true;
@@ -165,7 +186,69 @@ public sealed class MpvProcess : IDisposable
         _readThread = new Thread(ReadLoop) { IsBackground = true, Name = $"MpvIpc_{tag}" };
         _readThread.Start();
 
-        _log.Info(_tag, $"mpv 进程已启动: {mpvExePath} (pipe={pipeName}, wid={hwnd.ToInt64()})");
+        _log.Info(_tag, $"mpv 进程已启动: {mpvExePath} (pipe={pipeName}, wid={hwnd.ToInt64()}, hwdec={hwAccel})");
+    }
+
+    /// <summary>根据用户选择的硬件加速模式注入 mpv 参数。</summary>
+    private static void ApplyHwAccel(ProcessStartInfo psi, HwAccelMode mode, string? adapter = null)
+    {
+        switch (mode)
+        {
+            case HwAccelMode.Off:
+                // 软解
+                psi.ArgumentList.Add("--vo=gpu-next");
+                psi.ArgumentList.Add("--gpu-api=d3d11");
+                psi.ArgumentList.Add("--hwdec=no");
+                return;
+
+            case HwAccelMode.Nvidia:
+                psi.ArgumentList.Add("--vo=gpu-next");
+                psi.ArgumentList.Add("--gpu-api=d3d11");
+                psi.ArgumentList.Add("--hwdec=nvdec");
+                psi.ArgumentList.Add("--hwdec-codecs=all");
+                return;
+
+            case HwAccelMode.Intel:
+                psi.ArgumentList.Add("--vo=gpu-next");
+                psi.ArgumentList.Add("--gpu-api=d3d11");
+                psi.ArgumentList.Add("--hwdec=d3d11va");
+                psi.ArgumentList.Add("--hwdec-codecs=all");
+                return;
+
+            case HwAccelMode.Amd:
+                psi.ArgumentList.Add("--vo=gpu-next");
+                psi.ArgumentList.Add("--gpu-api=d3d11");
+                psi.ArgumentList.Add("--hwdec=d3d11va");
+                psi.ArgumentList.Add("--hwdec-codecs=all");
+                return;
+
+            case HwAccelMode.Adapter:
+                // 用户指定具体显卡：d3d11va + --d3d11-adapter=<显卡名>
+                psi.ArgumentList.Add("--vo=gpu-next");
+                psi.ArgumentList.Add("--gpu-api=d3d11");
+                psi.ArgumentList.Add("--hwdec=d3d11va");
+                psi.ArgumentList.Add("--hwdec-codecs=all");
+                if (!string.IsNullOrWhiteSpace(adapter))
+                    psi.ArgumentList.Add($"--d3d11-adapter={adapter}");
+                return;
+
+            case HwAccelMode.D3D11VA:
+                psi.ArgumentList.Add("--vo=gpu-next");
+                psi.ArgumentList.Add("--gpu-api=d3d11");
+                psi.ArgumentList.Add("--hwdec=d3d11va");
+                psi.ArgumentList.Add("--hwdec-codecs=all");
+                psi.ArgumentList.Add("--d3d11va-zero-copy=yes");
+                return;
+
+            case HwAccelMode.Auto:
+            default:
+                // 自动：让 mpv 自己选，但在 Windows 优先 d3d11va
+                psi.ArgumentList.Add("--vo=gpu-next");
+                psi.ArgumentList.Add("--gpu-api=d3d11");
+                psi.ArgumentList.Add("--hwdec=auto");
+                psi.ArgumentList.Add("--hwdec-codecs=all");
+                return;
+        }
     }
 
     /// <summary>连接 mpv 创建的命名管道（启动后需要重试）。</summary>
@@ -304,6 +387,21 @@ public sealed class MpvProcess : IDisposable
     public void Resume() { SendCommand("set_property", "pause", false); _isPaused = false; }
 
     public void Stop() => SendCommand("stop");
+
+    /// <summary>运行时切换硬解/软解（只改 hwdec 属性，不重启 mpv 进程，播放/DLNA 连接不中断）。</summary>
+    public void SetHwDec(HwAccelMode mode)
+    {
+        var hwdec = mode switch
+        {
+            HwAccelMode.Off => "no",
+            HwAccelMode.Nvidia => "nvdec",
+            HwAccelMode.Intel or HwAccelMode.Amd or HwAccelMode.D3D11VA or HwAccelMode.Adapter => "d3d11va",
+            _ => "auto"
+        };
+        SendCommand("set_property", "hwdec", hwdec);
+        SendCommand("set_property", "hwdec-codecs", "all");
+        _log.Info(_tag, $"硬件加速已即时切换为: hwdec={hwdec}（无需重启，播放保持）");
+    }
 
     public void Seek(double seconds) => SendCommand("seek", Math.Max(0, seconds), "absolute");
 
@@ -499,6 +597,21 @@ public sealed class MpvSessionManager : IDisposable
         return true;
     }
 
+    /// <summary>当前硬件加速模式（新会话启动时生效）。</summary>
+    public HwAccelMode HardwareAcceleration { get; set; } = HwAccelMode.Auto;
+
+    /// <summary>对当前正在播放的所有会话即时切换硬解/软解（不重启 mpv，DLNA 连接不中断）。</summary>
+    public void ApplyHwAccelSwitch(HwAccelMode mode)
+    {
+        HardwareAcceleration = mode;
+        foreach (var s in _sessions.Values)
+        {
+            if (s.Mpv == null) continue;
+            try { s.Mpv.SetHwDec(mode); }
+            catch (Exception ex) { _log.Warn(TagOf(s.Kind), $"切换硬件加速失败: {ex.Message}"); }
+        }
+    }
+
     /// <summary>为会话创建（或复用）MpvProcess 并嵌入窗口。</summary>
     private MpvProcess EnsureMpv(Session session)
     {
@@ -509,7 +622,7 @@ public sealed class MpvSessionManager : IDisposable
             var hwnd = session.Host.RenderHandle;
             if (hwnd == IntPtr.Zero)
                 throw new InvalidOperationException("播放窗口尚未创建完成");
-            var mpv = new MpvProcess(_log, tag, _mpvExePath, hwnd);
+            var mpv = new MpvProcess(_log, tag, _mpvExePath, hwnd, HardwareAcceleration);
             mpv.MediaLoaded += () => _log.Info(tag, "MPV 媒体加载完成");
             mpv.MediaFinished += () =>
             {

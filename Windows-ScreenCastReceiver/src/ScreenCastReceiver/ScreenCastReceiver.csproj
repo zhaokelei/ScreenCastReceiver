@@ -37,4 +37,9 @@
     <None Include="runtimes\**\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- 窗口图标资源 -->
+  <ItemGroup>
+    <Resource Include="favicon.png" />
+  </ItemGroup>
+
 </Project>

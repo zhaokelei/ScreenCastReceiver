@@ -43,7 +43,7 @@ public sealed class DmrUpnpServer : IDisposable
 
     private readonly AppLogger _log;
     private readonly string _udn;
-    private string _deviceName = "ScreenCastReceiver";
+    private string _deviceName = "Xiaolei DLAN";
 
     private UdpClient? _ssdp;
     private CancellationTokenSource? _ssdpCts;

@@ -15,7 +15,10 @@ namespace ScreenCastReceiver.Services;
 public sealed class DlnaDmrService : ScreenCastServiceBase
 {
     private DmrUpnpServer? _server;
-    private string _deviceName = "ScreenCastReceiver";
+    private string _deviceName = "Xiaolei DLAN";
+
+    /// <summary>用户指定的 DLNA HTTP 端口（0 表示自动探测）。</summary>
+    public int Port { get; set; }
 
     public DlnaDmrService(AppLogger log, MpvSessionManager mpv)
         : base(ServiceKind.Dlna, log, mpv)
@@ -31,8 +34,8 @@ public sealed class DlnaDmrService : ScreenCastServiceBase
 
     protected override Task StartCoreAsync(CancellationToken ct)
     {
-        // 关键端口探测（需求⑦）：HTTP 控制端口从 49152 起顺延；UDP 1900 为 DLNA 约定端口
-        var httpPort = PortProbe.FindFreeTcpPort(49152);
+        // 关键端口探测（需求⑦）：HTTP 控制端口默认从 49152 起顺延；用户指定端口时优先使用
+        var httpPort = Port > 0 && Port < 65536 ? Port : PortProbe.FindFreeTcpPort(49152);
         var bindIps = BindConfig.GetBindAddresses();
 
         _server = new DmrUpnpServer(Log)

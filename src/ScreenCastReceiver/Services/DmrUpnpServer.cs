@@ -316,22 +316,26 @@ public sealed class DmrUpnpServer : IDisposable
 
             if (path == "/description.xml" && method == "GET")
             {
-                _log.Info("[DLNA]", $"GET /description.xml from {((IPEndPoint)client.Client.RemoteEndPoint).Address} (UA={(headers.TryGetValue("USER-AGENT", out var ua) ? ua : "?")})");
+                var remoteDesc = client.Client?.RemoteEndPoint is IPEndPoint epDesc ? epDesc.Address.ToString() : "?";
+                _log.Info("[DLNA]", $"GET /description.xml from {remoteDesc} (UA={(headers.TryGetValue("USER-AGENT", out var ua) ? ua : "?")})");
                 response = BuildDeviceDescription();
             }
             else if (path.StartsWith("/scpd/") && method == "GET")
             {
-                _log.Info("[DLNA]", $"GET {path} from {((IPEndPoint)client.Client.RemoteEndPoint).Address}");
+                var remoteScpd = client.Client?.RemoteEndPoint is IPEndPoint epScpd ? epScpd.Address.ToString() : "?";
+                _log.Info("[DLNA]", $"GET {path} from {remoteScpd}");
                 response = BuildScpd(path);
             }
             else if (method == "POST" && headers.TryGetValue("SOAPACTION", out var soapAction))
             {
-                _log.Info("[DLNA]", $"SOAP {soapAction} from {((IPEndPoint)client.Client.RemoteEndPoint).Address}, body={body.Length}字节 (TE={(headers.TryGetValue("Transfer-Encoding", out var teH) ? teH : "-")}, CL={(headers.TryGetValue("Content-Length", out var clH) ? clH : "-")})");
+                var remoteSoap = client.Client?.RemoteEndPoint is IPEndPoint epSoap ? epSoap.Address.ToString() : "?";
+                _log.Info("[DLNA]", $"SOAP {soapAction} from {remoteSoap}, body={body.Length}字节 (TE={(headers.TryGetValue("Transfer-Encoding", out var teH) ? teH : "-")}, CL={(headers.TryGetValue("Content-Length", out var clH) ? clH : "-")})");
                 response = HandleSoap(soapAction, body);
             }
             else if (method == "SUBSCRIBE" || method == "UNSUBSCRIBE")
             {
-                _log.Info("[DLNA]", $"{(method == "SUBSCRIBE" ? "GENA 订阅" : "取消订阅")} from {((IPEndPoint)client.Client.RemoteEndPoint).Address}, 回调={(headers.TryGetValue("CALLBACK", out var cb) ? cb : "?")}");
+                var remoteGena = client.Client?.RemoteEndPoint is IPEndPoint epGena ? epGena.Address.ToString() : "?";
+                _log.Info("[DLNA]", $"{(method == "SUBSCRIBE" ? "GENA 订阅" : "取消订阅")} from {remoteGena}, 回调={(headers.TryGetValue("CALLBACK", out var cb) ? cb : "?")}");
                 // GENA 事件订阅：接受订阅但不主动推送（多数投屏客户端可正常工作）
                 response =
                     "HTTP/1.1 200 OK\r\n" +
@@ -877,7 +881,7 @@ public sealed class DmrUpnpServer : IDisposable
         {
             using var udp = new UdpClient(AddressFamily.InterNetwork);
             udp.Connect(remote, 1900);
-            return ((IPEndPoint)udp.Client.LocalEndPoint).Address;
+            return udp.Client?.LocalEndPoint is IPEndPoint ep ? ep.Address : IPAddress.Loopback;
         }
         catch
         {

@@ -7,25 +7,15 @@
 Thumbs.db
 Desktop.ini
 
-# === .NET / WPF (Windows-ScreenCastReceiver & tests) ===
+# === .NET / WPF ===
 **/bin/
 **/obj/
-Windows-ScreenCastReceiver/publish/
-Windows-ScreenCastReceiver/_backup_broken_0815/
+publish/
+_backup_broken_0815/
 
-# === Android / Gradle (Android-ScreenPush) ===
-Android-ScreenPush/.gradle/
-Android-ScreenPush/.kotlin/
-Android-ScreenPush/build/
-Android-ScreenPush/app/build/
-Android-ScreenPush/captures/
-Android-ScreenPush/local.properties
-*.apk
-*.aab
+# === 安装包输出（Inno Setup 产物） ===
+installer/Output/
 
-# === Go (screencast-go) ===
-screencast-go/*.exe
-# mpv 播放器二进制（约 113MB 运行时依赖），需自行放置到 screencast-go/mpv/ 目录
-screencast-go/mpv/mpv.exe
-# mpv 播放器 DLL（各约 114MB，超出 GitHub 100MB 限制），需自行放置到 libs/mpv-dll/ 目录
-Windows-ScreenCastReceiver/libs/mpv-dll/
+# === mpv 播放器二进制（约 113MB 运行时依赖，超出 GitHub 100MB 单文件限制） ===
+mpv/
+libs/mpv-dll/

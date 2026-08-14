@@ -1,0 +1,55 @@
+name: Build Xiaolei DLAN
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (win-x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore ScreenCastReceiver.sln
+
+      - name: Publish (Release x64)
+        run: dotnet publish src/ScreenCastReceiver/ScreenCastReceiver.csproj -c Release -o publish/out
+
+      - name: Download mpv (latest win64 build)
+        shell: pwsh
+        run: |
+          $headers = @{ 'User-Agent' = 'XiaoleiDLAN-CI' }
+          $rel = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest'
+          $asset = $rel.assets | Where-Object { $_.name -like 'mpv-x86_64-*.7z' } | Select-Object -First 1
+          if (-not $asset) { throw '未找到 mpv-x86_64 的 7z 资产' }
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "$env:RUNNER_TEMP\mpv.7z"
+          7z x "$env:RUNNER_TEMP\mpv.7z" -o"$env:RUNNER_TEMP\mpv" -y | Out-Null
+          # mpv.exe 可能在 7z 根目录，也可能在子目录中，统一查找
+          if (Test-Path "$env:RUNNER_TEMP\mpv\mpv.exe") {
+            $mpvDir = Get-Item "$env:RUNNER_TEMP\mpv"
+          } else {
+            $mpvDir = Get-ChildItem "$env:RUNNER_TEMP\mpv" -Recurse -Directory |
+              Where-Object { Test-Path (Join-Path $_.FullName 'mpv.exe') } | Select-Object -First 1
+          }
+          if (-not $mpvDir) { throw '解压后未找到 mpv.exe' }
+          New-Item -ItemType Directory -Force -Path 'publish/out/mpv' | Out-Null
+          Copy-Item -Path "$($mpvDir.FullName)\*" -Destination 'publish/out/mpv\' -Recurse -Force
+
+      - name: List output
+        run: Get-ChildItem -Recurse publish/out | Select-Object FullName, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XiaoleiDLAN-win-x64
+          path: publish/out/**
+          if-no-files-found: error

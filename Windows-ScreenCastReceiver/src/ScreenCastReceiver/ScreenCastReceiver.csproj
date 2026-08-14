@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    项目属性：
+      - 目标框架 .NET 8 (net8.0-windows) + WPF
+      - 强制 x64（RPiPlay.dll / Miracast.dll / go2rtc.dll 均为 x64 原生库）
+      - Mpv.NET NuGet 包（libmpv 的 .NET 封装）
+    -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AssemblyName>ScreenCastReceiver</AssemblyName>
+    <RootNamespace>ScreenCastReceiver</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- NuGet 依赖清单（可在 VS 中恢复） -->
+  <ItemGroup>
+    <!--
+      播放器改为独立 mpv.exe 进程 + 命名管道 IPC（参考 Macast 方案），
+      不再依赖 Mpv.NET/libmpv 内嵌库。mpv.exe 需放入输出目录 mpv\ 子目录（见 libs/README.md）。
+    -->
+  </ItemGroup>
+
+  <!-- 原生 DLL 目录：RPiPlay.dll / Miracast.dll / go2rtc.dll 等随输出目录复制 -->
+  <ItemGroup>
+    <None Include="runtimes\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

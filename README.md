@@ -1,6 +1,6 @@
 # Xiaolei DLAN
 
-Windows 桌面 DLNA 投屏接收端（原名 ScreenCastReceiver）。手机/平板通过 DLNA（UPnP AV）发现本机后即可投屏播放视频，播放内核为独立的 [mpv](https://mpv.io/) 进程（命名管道 IPC 控制）。
+Windows 桌面 DLNA 投屏接收端。手机/平板通过 DLNA（UPnP AV）发现本机后即可投屏播放视频，播放内核为独立的 [mpv](https://mpv.io/) 进程（命名管道 IPC 控制）。
 
 ## 功能特性
 

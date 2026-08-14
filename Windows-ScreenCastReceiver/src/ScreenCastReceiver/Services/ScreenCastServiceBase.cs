@@ -40,13 +40,7 @@ public abstract class ScreenCastServiceBase : IDisposable
         Kind = kind;
         Log = log;
         Mpv = mpv;
-        Tag = kind switch
-        {
-            ServiceKind.Dlna => "[DLNA]",
-            ServiceKind.AirPlay2 => "[AirPlay2]",
-            ServiceKind.Miracast => "[Miracast]",
-            _ => "[RTSP-WebRTC]"
-        };
+        Tag = "[DLNA]";
 
         // 休眠/唤醒 + 网络变化监听（需求⑩）
         SystemEvents.PowerModeChanged += OnPowerModeChanged;

@@ -390,8 +390,8 @@ public sealed class MpvProcess : IDisposable
 
 /// <summary>
 /// MPV 会话管理（需求⑧：会话隔离 + 抢占确认）。
-/// - DLNA / AirPlay2 / Miracast / RTSP-WebRTC 四个来源各一个独立 MPV 会话，互不串流
-/// - 新的投屏接入时如果已有其他来源在播放，触发抢占确认回调由 GUI 弹窗询问
+/// - DLNA 来源独立 MPV 会话
+/// - 新的投屏接入时如果已有画面在播放，触发抢占确认回调由 GUI 弹窗询问
 /// - 所有协议的视频流/URL 统一走独立 mpv.exe 进程渲染（通过命名管道 IPC 控制，
 ///   不再依赖 Mpv.NET/libmpv 内嵌库，规避 libmpv 1.x/2.x API 兼容问题）
 /// </summary>
@@ -424,10 +424,7 @@ public sealed class MpvSessionManager : IDisposable
         _log = log;
         _sessions = new Dictionary<ServiceKind, Session>
         {
-            [ServiceKind.Dlna] = new() { Kind = ServiceKind.Dlna, Host = new Win32HwndHost() },
-            [ServiceKind.AirPlay2] = new() { Kind = ServiceKind.AirPlay2, Host = new Win32HwndHost() },
-            [ServiceKind.Miracast] = new() { Kind = ServiceKind.Miracast, Host = new Win32HwndHost() },
-            [ServiceKind.RtspWebRtc] = new() { Kind = ServiceKind.RtspWebRtc, Host = new Win32HwndHost() }
+            [ServiceKind.Dlna] = new() { Kind = ServiceKind.Dlna, Host = new Win32HwndHost() }
         };
         _mpvExePath = LocateMpvExe();
     }
@@ -478,38 +475,6 @@ public sealed class MpvSessionManager : IDisposable
         catch (Exception ex)
         {
             _log.Error(tag, $"MPV 加载失败（可能是 DRM/加密流）: {ex.Message}");
-            return false;
-        }
-    }
-
-    /// <summary>请求播放 AirPlay 镜像 H264 裸流（本地 tcp 转发地址，lavf h264 解复用）。</summary>
-    public async Task<bool> RequestPlaybackLiveH264(ServiceKind kind, string tcpUrl)
-        => await PlayLive(kind, tcpUrl, "lavf", "h264");
-
-    /// <summary>请求播放 Miracast MPEG-TS 流（本地 tcp 转发地址）。</summary>
-    public async Task<bool> RequestPlaybackLiveTs(ServiceKind kind, string tcpUrl)
-        => await PlayLive(kind, tcpUrl, "lavf", "mpegts");
-
-    private async Task<bool> PlayLive(ServiceKind kind, string tcpUrl, string demuxer, string lavfFormat)
-    {
-        var session = _sessions[kind];
-        if (!await EnsureCanTakeover(kind)) return false;
-
-        try
-        {
-            // 与 RequestPlayback 相同：先激活窗口再创建 mpv，避免窗口隐藏时渲染表面初始化失败
-            session.Busy = true;
-            ActiveKind = kind;
-            ActiveSessionChanged?.Invoke(kind);
-
-            var mpv = EnsureMpv(session);
-            mpv.LoadFile(tcpUrl, force: true, demuxer: demuxer, lavfFormat: lavfFormat);
-            _log.Info(TagOf(kind), $"开始播放直播流: {tcpUrl} (格式={lavfFormat})");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _log.Error(TagOf(kind), $"播放直播流失败: {ex.Message}");
             return false;
         }
     }
@@ -674,13 +639,7 @@ public sealed class MpvSessionManager : IDisposable
         try { mpv.Stop(); } catch { /* 忽略停止异常 */ }
     }
 
-    private static string TagOf(ServiceKind kind) => kind switch
-    {
-        ServiceKind.Dlna => "[DLNA]",
-        ServiceKind.AirPlay2 => "[AirPlay2]",
-        ServiceKind.Miracast => "[Miracast]",
-        _ => "[RTSP-WebRTC]"
-    };
+    private static string TagOf(ServiceKind kind) => "[DLNA]";
 
     /// <summary>程序退出前释放全部 MPV 会话。</summary>
     public void DisposeAll()

@@ -6,7 +6,7 @@ namespace ScreenCastReceiver.Logging;
 
 /// <summary>
 /// 线程安全日志器。
-/// - 每条日志带来源标签（[DLNA] [AirPlay2] [Miracast] [RTSP-WebRTC]）
+/// - 每条日志带来源标签（[DLNA]）
 /// - 通过事件推送到 GUI 文本框
 /// - 同时落盘到 Logs 目录
 /// </summary>

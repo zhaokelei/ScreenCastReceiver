@@ -21,7 +21,7 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- 服务控制面板（四个独立复选框，任意组合启停，互不影响） -->
+            <!-- 服务控制面板（DLNA 服务） -->
             <GroupBox Grid.Row="0" Header="服务控制面板" Margin="0,0,0,8">
                 <StackPanel>
                     <!-- DLNA -->
@@ -37,38 +37,6 @@
                         <TextBlock Text="状态:" Foreground="Gray"/>
                         <TextBlock x:Name="TxtDlnaStatus" Text="未启动" Foreground="Gray" Margin="4,0,0,0"/>
                         <TextBlock x:Name="TxtDlnaPort" Text="" Foreground="DodgerBlue" Margin="12,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- AirPlay2 -->
-                    <CheckBox x:Name="ChkAirPlay" Content="启用AirPlay2(iOS投屏+镜像)" Margin="2,8,2,2"
-                              Checked="OnAirPlayChecked" Unchecked="OnAirPlayUnchecked"/>
-                    <StackPanel Orientation="Horizontal" Margin="2,2">
-                        <TextBlock Text="状态:" Foreground="Gray"/>
-                        <TextBlock x:Name="TxtAirPlayStatus" Text="未启动" Foreground="Gray" Margin="4,0,0,0"/>
-                        <TextBlock x:Name="TxtAirPlayPort" Text="" Foreground="DodgerBlue" Margin="12,0,0,0"/>
-                    </StackPanel>
-
-                    <!-- Miracast -->
-                    <CheckBox x:Name="ChkMiracast" Content="启用Miracast(安卓原生系统镜像)" Margin="2,8,2,2"
-                              Checked="OnMiracastChecked" Unchecked="OnMiracastUnchecked"/>
-                    <StackPanel Orientation="Horizontal" Margin="2,2">
-                        <TextBlock Text="状态:" Foreground="Gray"/>
-                        <TextBlock x:Name="TxtMiracastStatus" Text="未启动" Foreground="Gray" Margin="4,0,0,0"/>
-                        <TextBlock x:Name="TxtMiracastPort" Text="" Foreground="DodgerBlue" Margin="12,0,0,0"/>
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="2,2">
-                        <TextBlock Text="硬件检测:" Foreground="Gray"/>
-                        <TextBlock x:Name="TxtMiracastHw" Text="检测中..." Foreground="Orange" Margin="4,0,0,0"
-                                   ToolTip="依据 netsh wlan show drivers 的无线显示支持字段；硬件不支持时仍可手动开启服务，结果仅记录日志"/>
-                    </StackPanel>
-
-                    <!-- RTSP-WebRTC -->
-                    <CheckBox x:Name="ChkRtsp" Content="启用RTSP备用安卓镜像(无需Wi-Fi Display，手机APP推流)" Margin="2,8,2,2"
-                              Checked="OnRtspChecked" Unchecked="OnRtspUnchecked"/>
-                    <StackPanel Orientation="Horizontal" Margin="2,2">
-                        <TextBlock Text="状态:" Foreground="Gray"/>
-                        <TextBlock x:Name="TxtRtspStatus" Text="未启动" Foreground="Gray" Margin="4,0,0,0"/>
-                        <TextBlock x:Name="TxtRtspPort" Text="" Foreground="DodgerBlue" Margin="12,0,0,0"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="2,2">
                         <TextBlock Text="本机局域网IP:" Foreground="Gray"/>
@@ -122,7 +90,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- 播放窗口区域：四个来源各一个原生窗口宿主（会话隔离），仅激活的可见 -->
+            <!-- 播放窗口区域：DLNA 会话的窗口宿主（会话隔离），仅激活的可见 -->
             <Border Grid.Row="0" BorderBrush="#333" BorderThickness="1" Background="Black">
                 <Grid x:Name="PlaybackHosts">
                     <TextBlock x:Name="TxtNoSignal" Text="等待投屏接入..."
@@ -188,7 +156,7 @@
 
             <!-- 底部提示条 -->
             <TextBlock Grid.Row="2" TextWrapping="Wrap" Foreground="Gray" FontSize="11" Margin="2,6,2,0"
-                       Text="提示：各服务完全独立，可任意组合启停；某服务启动失败不影响其他服务。新投屏接入且已有画面在播放时，会弹窗询问是否抢占。"/>
+                       Text="提示：新投屏接入且已有画面在播放时，会弹窗询问是否抢占。"/>
         </Grid>
     </Grid>
 </Window>

@@ -3,8 +3,8 @@
   <!--
     项目属性：
       - 目标框架 .NET 8 (net8.0-windows) + WPF
-      - 强制 x64（RPiPlay.dll / Miracast.dll / go2rtc.dll 均为 x64 原生库）
-      - Mpv.NET NuGet 包（libmpv 的 .NET 封装）
+      - 强制 x64
+      - mpv.exe 独立进程（见 libs/README.md）
     -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -32,7 +32,7 @@
     -->
   </ItemGroup>
 
-  <!-- 原生 DLL 目录：RPiPlay.dll / Miracast.dll / go2rtc.dll 等随输出目录复制 -->
+  <!-- 原生 DLL 目录：随输出目录复制 -->
   <ItemGroup>
     <None Include="runtimes\**\*.*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

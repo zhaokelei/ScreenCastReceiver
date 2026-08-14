@@ -1,12 +1,9 @@
 namespace ScreenCastReceiver.Models;
 
-/// <summary>四大后台服务来源类型（决定日志标签与 MPV 会话隔离）。</summary>
+/// <summary>后台服务来源类型（决定日志标签与 MPV 会话隔离）。</summary>
 public enum ServiceKind
 {
-    Dlna,
-    AirPlay2,
-    Miracast,
-    RtspWebRtc
+    Dlna
 }
 
 /// <summary>服务运行状态。</summary>
